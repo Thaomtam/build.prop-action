@@ -18,10 +18,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install required tools
+      - name: Install necessary packages (7-Zip, simg2img, jq)
         run: |
           sudo apt-get update
-          sudo apt-get install -y p7zip-full android-sdk-libsparse-utils
+          sudo apt-get install -y p7zip-full jq simg2img
 
       - name: Download ROM file
         run: |
@@ -33,37 +33,48 @@ jobs:
           7z x rom.zip -orom_extracted
           echo "ROM extracted to rom_extracted directory."
 
-      - name: Extract vendor.img using 7-Zip
+      - name: Check vendor.img format and convert if necessary
         run: |
           cd rom_extracted
-          7z x vendor.img -o vendor_extracted || echo "Failed to extract vendor.img with 7-Zip, may not be a valid archive."
-
-      - name: Convert vendor.img to raw image
-        run: |
           if [ -f vendor.img ]; then
-            simg2img vendor.img vendor_raw.img
-            echo "Converted vendor.img to vendor_raw.img."
+            echo "vendor.img found. Checking format..."
+            VENDOR_TYPE=$(file vendor.img)
+            echo "vendor.img type: $VENDOR_TYPE"
+            
+            if [[ "$VENDOR_TYPE" == *"Android sparse image"* ]]; then
+              echo "Converting sparse image to raw image using simg2img..."
+              simg2img vendor.img vendor_raw.img
+              mv vendor_raw.img vendor.img
+              echo "Conversion complete."
+            else
+              echo "vendor.img is not a sparse image, proceeding with extraction..."
+            fi
           else
             echo "::error:: vendor.img not found!"
             exit 1
           fi
 
-      - name: Mount and extract build.prop
+      - name: Extract vendor.img using 7-Zip
         run: |
-          mkdir -p vendor_mount
-          sudo mount -o loop vendor_raw.img vendor_mount || echo "::error:: Failed to mount vendor_raw.img"
-          if [ -f vendor_mount/build.prop ]; then
-            echo "build.prop found. Extracting device info..."
-            MANUFACTURER=$(grep -oP 'ro.product.manufacturer=\K.*' vendor_mount/build.prop)
-            MODEL=$(grep -oP 'ro.product.model=\K.*' vendor_mount/build.prop)
-            FINGERPRINT=$(grep -oP 'ro.build.fingerprint=\K.*' vendor_mount/build.prop)
-            BRAND=$(grep -oP 'ro.product.brand=\K.*' vendor_mount/build.prop)
-            PRODUCT=$(grep -oP 'ro.product.name=\K.*' vendor_mount/build.prop)
-            DEVICE=$(grep -oP 'ro.product.device=\K.*' vendor_mount/build.prop)
-            SECURITY_PATCH=$(grep -oP 'ro.build.version.security_patch=\K.*' vendor_mount/build.prop)
-            FIRST_API_LEVEL=$(grep -oP 'ro.product.first_api_level=\K.*' vendor_mount/build.prop)
+          cd rom_extracted
+          7z x vendor.img -ovendor_extracted || (echo "::error:: Failed to extract vendor.img!" && exit 1)
+          echo "Extracted vendor.img to vendor_extracted directory."
 
-            # Create JSON file
+      - name: Locate build.prop and extract device info
+        run: |
+          cd vendor_extracted
+          if [ -f build.prop ]; then
+            echo "build.prop found. Extracting device info..."
+            MANUFACTURER=$(grep -oP 'ro.product.manufacturer=\K.*' build.prop)
+            MODEL=$(grep -oP 'ro.product.model=\K.*' build.prop)
+            FINGERPRINT=$(grep -oP 'ro.build.fingerprint=\K.*' build.prop)
+            BRAND=$(grep -oP 'ro.product.brand=\K.*' build.prop)
+            PRODUCT=$(grep -oP 'ro.product.name=\K.*' build.prop)
+            DEVICE=$(grep -oP 'ro.product.device=\K.*' build.prop)
+            SECURITY_PATCH=$(grep -oP 'ro.build.version.security_patch=\K.*' build.prop)
+            FIRST_API_LEVEL=$(grep -oP 'ro.product.first_api_level=\K.*' build.prop)
+
+            # Tạo file JSON
             echo "{
               \"MANUFACTURER\": \"$MANUFACTURER\",
               \"MODEL\": \"$MODEL\",
