@@ -8,7 +8,7 @@ on:
         default: "https://builds.paranoidandroid.co/aospa-uvite-beta-phone2-20240623-image.zip"
       DEVICE_NAME:
         description: "Device Name"
-        default: "Nothing phone 2"
+        default: "phone2"
 
 jobs:
   extract-rom:
