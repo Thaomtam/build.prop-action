@@ -28,8 +28,8 @@ jobs:
 
             - name: Download ROM file and rename
               run: |
-                  curl -LJO ${{ github.event.inputs.ROM_URL }}
-                  downloaded_file=$(basename "${{ github.event.inputs.ROM_URL }}")
+                  curl -LO ${{ github.event.inputs.ROM_URL }}
+                  downloaded_file=$(ls -t | head -n 1)  # Lấy file mới nhất
                   mv "$downloaded_file" rom.zip
 
             - name: Extract ROM
