@@ -5,13 +5,13 @@ on:
         inputs:
             ROM_URL:
                 description: "ROM_URL"
-                default: "https://builds.paranoidandroid.co/aospa-uvite-beta-oneplus9-20240412.zip"
+                default: "https://builds.paranoidandroid.co/aospa-topaz-2-bladerunner_48m-20230820-image.zip"
             DEVICE_NAME:
                 description: "DEVICE_NAME"
                 default: "oneplus9"
             EXTRACTED_FILES:
                 description: "EXTRACTED_FILES"
-                default: "boot.img, dtbo.img, product.img, system.img, system_ext.img"
+                default: "build.prop"
 
 jobs:
     build-and-release:
@@ -21,34 +21,55 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v4
 
-            - name: Download file
-              run: curl -LJO ${{ github.event.inputs.ROM_URL }}
-
-            - name: Extract Payload
+            - name: Install tools
               run: |
-                  chmod u+x .github/scripts/android-ota-extractor
-                  .github/scripts/android-ota-extractor *.zip
-                  echo "ZIP_FILE=$(basename -a *.zip)" >> $GITHUB_ENV
-                  echo "ZIP_FILE_SHA256=$(sha256sum *.zip | cut -d' ' -f1)" >> $GITHUB_ENV
+                  sudo apt-get update
+                  sudo apt-get install -y simg2img unzip e2fsprogs
 
-                  large_files=$(find . -maxdepth 1 -type f -size +2G)
-                  if [ -n "$large_files" ]; then
-                    echo -e "\n::warning:: Deleting files larger than 2 GB..."
-                    for file in $large_files; do
-                      echo "$file ($(du -h "$file" | awk '{print $1}'))" && rm "$file"
-                    done
+            - name: Download ROM file and rename
+              run: |
+                  curl -LJO ${{ github.event.inputs.ROM_URL }}
+                  downloaded_file=$(basename "${{ github.event.inputs.ROM_URL }}")
+                  mv "$downloaded_file" rom.zip
+
+            - name: Extract ROM
+              run: |
+                  unzip rom.zip -d extracted_rom
+                  echo "ZIP_FILE=rom.zip" >> $GITHUB_ENV
+                  echo "ZIP_FILE_SHA256=$(sha256sum rom.zip | cut -d' ' -f1)" >> $GITHUB_ENV
+
+            - name: Find and extract vendor.img
+              run: |
+                  cd extracted_rom
+                  vendor_image=$(find . -name "vendor.img")
+                  if [ -z "$vendor_image" ]; then
+                    echo "::error::vendor.img not found!"
+                    exit 1
                   fi
+                  simg2img "$vendor_image" vendor_raw.img
+                  mkdir vendor_mount
+                  sudo mount -o loop vendor_raw.img vendor_mount
 
-            - name: Upload to Release
+            - name: Extract build.prop
+              run: |
+                  cp vendor_mount/build.prop build.prop
+                  cat build.prop
+
+            - name: Upload build.prop to Release
               uses: softprops/action-gh-release@v2
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
-                  files: ${{ github.event.inputs.EXTRACTED_FILES }}
-                  name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
+                  files: build.prop
+                  name: ${{ github.event.inputs.DEVICE_NAME }}-build-prop-${{ github.run_id }}
                   tag_name: ${{ github.run_id }}
                   body: |
                       Device: ${{ github.event.inputs.DEVICE_NAME }}
                       Filename: [${{ env.ZIP_FILE }}](${{ github.event.inputs.ROM_URL }})
-                      Extracted files: ${{ github.event.inputs.EXTRACTED_FILES }}
+                      Extracted file: build.prop
                       SHA256: ${{ env.ZIP_FILE_SHA256 }}
+
+            - name: Clean up
+              run: |
+                  sudo umount vendor_mount
+                  rm -rf extracted_rom vendor_mount vendor_raw.img build.prop rom.zip
