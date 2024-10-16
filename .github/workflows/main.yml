@@ -18,10 +18,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install necessary packages (7-Zip, jq, simg2img)
+      - name: Install necessary packages (7-Zip, simg2img)
         run: |
           sudo apt-get update
-          sudo apt-get install -y p7zip-full jq simg2img
+          sudo apt-get install -y p7zip-full simg2img
 
       - name: Download ROM file
         run: |
@@ -32,8 +32,6 @@ jobs:
           fi
 
           FILE_TYPE=$(file rom.zip)
-          echo "Downloaded file type: $FILE_TYPE"
-
           if [[ "$FILE_TYPE" != *"Zip archive"* ]]; then
             echo "::error:: The downloaded file is not a valid ZIP archive!"
             exit 1
@@ -44,7 +42,6 @@ jobs:
             echo "::error:: Downloaded ROM file is too small. Possible download error!"
             exit 1
           fi
-          echo "ROM file downloaded and verified as rom.zip."
 
       - name: Extract ROM using 7-Zip
         run: |
@@ -53,73 +50,26 @@ jobs:
             echo "::error:: Failed to extract ROM zip!"
             exit 1
           fi
-          echo "ROM extracted to rom_extracted directory."
 
-      - name: Check vendor.img format and convert if necessary
+      - name: Check and convert vendor.img if necessary
         run: |
           cd rom_extracted
           if [ -f vendor.img ]; then
-            echo "vendor.img found. Checking format..."
             VENDOR_TYPE=$(file vendor.img)
-            echo "vendor.img type: $VENDOR_TYPE"
-            
             if [[ "$VENDOR_TYPE" == *"Android sparse image"* ]]; then
-              echo "Converting sparse image to raw image using simg2img..."
               simg2img vendor.img vendor_raw.img
               mv vendor_raw.img vendor.img
-              echo "Conversion complete."
-            else
-              echo "vendor.img is not a sparse image, proceeding with extraction..."
             fi
           else
             echo "::error:: vendor.img not found!"
             exit 1
           fi
 
-      - name: Attempt to extract vendor.img using simg2img and mount
-        run: |
-          echo "Attempting to mount vendor.img as it may not be a ZIP archive."
-          mkdir vendor_mount
-          sudo mount -o loop vendor.img vendor_mount || (echo "::error:: Failed to mount vendor.img!" && exit 1)
-          echo "vendor.img mounted successfully."
-
-      - name: Locate build.prop and extract device info
-        run: |
-          cd vendor_mount
-          if [ -f build.prop ]; then
-            echo "build.prop found. Extracting device info..."
-            MANUFACTURER=$(grep -oP 'ro.product.manufacturer=\K.*' build.prop)
-            MODEL=$(grep -oP 'ro.product.model=\K.*' build.prop)
-            FINGERPRINT=$(grep -oP 'ro.build.fingerprint=\K.*' build.prop)
-            BRAND=$(grep -oP 'ro.product.brand=\K.*' build.prop)
-            PRODUCT=$(grep -oP 'ro.product.name=\K.*' build.prop)
-            DEVICE=$(grep -oP 'ro.product.device=\K.*' build.prop)
-            SECURITY_PATCH=$(grep -oP 'ro.build.version.security_patch=\K.*' build.prop)
-            FIRST_API_LEVEL=$(grep -oP 'ro.product.first_api_level=\K.*' build.prop)
-
-            # Tạo file JSON
-            echo "{
-              \"MANUFACTURER\": \"$MANUFACTURER\",
-              \"MODEL\": \"$MODEL\",
-              \"FINGERPRINT\": \"$FINGERPRINT\",
-              \"BRAND\": \"$BRAND\",
-              \"PRODUCT\": \"$PRODUCT\",
-              \"DEVICE\": \"$DEVICE\",
-              \"SECURITY_PATCH\": \"$SECURITY_PATCH\",
-              \"FIRST_API_LEVEL\": \"$FIRST_API_LEVEL\"
-            }" > extracted_info.json
-
-            echo "Extracted info saved to extracted_info.json."
-          else
-            echo "::error:: build.prop not found!"
-            exit 1
-          fi
-
-      - name: Upload extracted_info.json to Release
+      - name: Upload vendor.img to Release
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: extracted_info.json
-          name: ${{ github.event.inputs.DEVICE_NAME }}-extracted-info-${{ github.run_id }}
+          files: rom_extracted/vendor.img
+          name: ${{ github.event.inputs.DEVICE_NAME }}-vendor-${{ github.run_id }}
           tag_name: ${{ github.run_id }}
