@@ -1,93 +1,79 @@
 name: Extract and Release
 
 on:
-    workflow_dispatch:
-        inputs:
-            ROM_URL:
-                description: "ROM_URL"
-                default: "https://pixeldrain.com/api/file/StGHtPFc"
-            DEVICE_NAME:
-                description: "DEVICE_NAME"
-                default: "OnePlus 9R"
-            EXTRACTED_FILES:
-                description: "EXTRACTED_FILES"
-                default: "build.prop"
+  workflow_dispatch:
+    inputs:
+      ROM_URL:
+        description: "ROM URL"
+        default: "https://builds.paranoidandroid.co/aospa-topaz-2-bladerunner_48m-20230820-image.zip"
+      DEVICE_NAME:
+        description: "Device Name"
+        default: "oneplus9"
 
 jobs:
-    build-and-release:
-        runs-on: ubuntu-latest
-        permissions: write-all
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  extract-rom:
+    runs-on: ubuntu-latest
 
-            - name: Install tools
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y simg2img unzip e2fsprogs
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Download ROM file and rename
-              run: |
-                  curl -LO ${{ github.event.inputs.ROM_URL }}
-                  downloaded_file=$(ls -t | head -n 1)  # Lấy file mới nhất
-                  mv "$downloaded_file" rom.zip
+      - name: Install 7-Zip
+        run: sudo apt-get install -y p7zip-full
 
-            - name: Extract ROM
-              run: |
-                  unzip rom.zip -d extracted_rom
-                  echo "ZIP_FILE=rom.zip" >> $GITHUB_ENV
-                  echo "ZIP_FILE_SHA256=$(sha256sum rom.zip | cut -d' ' -f1)" >> $GITHUB_ENV
+      - name: Download ROM file
+        run: |
+          curl -L ${{ github.event.inputs.ROM_URL }} --output rom.zip
+          echo "ROM file downloaded and renamed to rom.zip."
 
-            - name: Find and convert vendor.img
-              run: |
-                  cd extracted_rom
-                  vendor_image=$(find . -name "vendor.img")
-                  if [ -z "$vendor_image" ]; then
-                    echo "::error::vendor.img not found!"
-                    exit 1
-                  fi
-                  # Kiểm tra xem có phải sparse image hay không
-                  if file "$vendor_image" | grep -q "sparse"; then
-                    echo "Converting sparse image..."
-                    simg2img "$vendor_image" vendor_raw.img
-                  else
-                    echo "Not a sparse image, copying directly."
-                    cp "$vendor_image" vendor_raw.img
-                  fi
-            
-                  # Kiểm tra loại hệ thống file
-                  file_type=$(file vendor_raw.img)
-                  echo "File type: $file_type"
-            
-                  # Chỉ mount nếu là ext4 hoặc loại file hệ thống hợp lệ
-                  if echo "$file_type" | grep -q "ext4"; then
-                    mkdir vendor_mount
-                    sudo mount -o loop vendor_raw.img vendor_mount
-                  else
-                    echo "::error::Unsupported file system type!"
-                    exit 1
-                  fi
+      - name: Extract ROM using 7-Zip
+        run: |
+          7z x rom.zip -orom_extracted
+          echo "ROM extracted to rom_extracted directory."
 
-            - name: Extract build.prop
-              run: |
-                  cp vendor_mount/build.prop build.prop
-                  cat build.prop
+      - name: Extract vendor.img using 7-Zip
+        run: |
+          cd rom_extracted
+          7z x vendor.img -ovendor_extracted
+          echo "Extracted vendor.img to vendor_extracted directory."
 
-            - name: Upload build.prop to Release
-              uses: softprops/action-gh-release@v2
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  files: build.prop
-                  name: ${{ github.event.inputs.DEVICE_NAME }}-build-prop-${{ github.run_id }}
-                  tag_name: ${{ github.run_id }}
-                  body: |
-                      Device: ${{ github.event.inputs.DEVICE_NAME }}
-                      Filename: [${{ env.ZIP_FILE }}](${{ github.event.inputs.ROM_URL }})
-                      Extracted file: build.prop
-                      SHA256: ${{ env.ZIP_FILE_SHA256 }}
+      - name: Locate build.prop and extract device info
+        run: |
+          cd vendor_extracted
+          if [ -f build.prop ]; then
+            echo "build.prop found. Extracting device info..."
+            MANUFACTURER=$(grep -oP 'ro.product.manufacturer=\K.*' build.prop)
+            MODEL=$(grep -oP 'ro.product.model=\K.*' build.prop)
+            FINGERPRINT=$(grep -oP 'ro.build.fingerprint=\K.*' build.prop)
+            BRAND=$(grep -oP 'ro.product.brand=\K.*' build.prop)
+            PRODUCT=$(grep -oP 'ro.product.name=\K.*' build.prop)
+            DEVICE=$(grep -oP 'ro.product.device=\K.*' build.prop)
+            SECURITY_PATCH=$(grep -oP 'ro.build.version.security_patch=\K.*' build.prop)
+            FIRST_API_LEVEL=$(grep -oP 'ro.product.first_api_level=\K.*' build.prop)
 
-            - name: Clean up
-              run: |
-                  sudo umount vendor_mount
-                  rm -rf extracted_rom vendor_mount vendor_raw.img build.prop rom.zip
+            # Tạo file JSON
+            echo "{
+              \"MANUFACTURER\": \"$MANUFACTURER\",
+              \"MODEL\": \"$MODEL\",
+              \"FINGERPRINT\": \"$FINGERPRINT\",
+              \"BRAND\": \"$BRAND\",
+              \"PRODUCT\": \"$PRODUCT\",
+              \"DEVICE\": \"$DEVICE\",
+              \"SECURITY_PATCH\": \"$SECURITY_PATCH\",
+              \"FIRST_API_LEVEL\": \"$FIRST_API_LEVEL\"
+            }" > extracted_info.json
+
+            echo "Extracted info saved to extracted_info.json."
+          else
+            echo "::error:: build.prop not found!"
+            exit 1
+          fi
+
+      - name: Upload extracted_info.json to Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: extracted_info.json
+          name: ${{ github.event.inputs.DEVICE_NAME }}-extracted-info-${{ github.run_id }}
+          tag_name: ${{ github.run_id }}
