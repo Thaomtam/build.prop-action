@@ -5,10 +5,10 @@ on:
     inputs:
       ROM_URL:
         description: "ROM URL"
-        default: "https://pixeldrain.com/api/file/StGHtPFc"
+        default: "https://builds.paranoidandroid.co/aospa-topaz-2-bladerunner_48m-20230820-image.zip"
       DEVICE_NAME:
         description: "Device Name"
-        default: "OnePlus 9R"
+        default: "oneplus9"
 
 jobs:
   extract-rom:
@@ -76,15 +76,16 @@ jobs:
             exit 1
           fi
 
-      - name: Extract vendor.img using 7-Zip
+      - name: Attempt to extract vendor.img using simg2img and mount
         run: |
-          cd rom_extracted
-          7z x vendor.img -ovendor_extracted || (echo "::error:: Failed to extract vendor.img!" && exit 1)
-          echo "Extracted vendor.img to vendor_extracted directory."
+          echo "Attempting to mount vendor.img as it may not be a ZIP archive."
+          mkdir vendor_mount
+          sudo mount -o loop vendor.img vendor_mount || (echo "::error:: Failed to mount vendor.img!" && exit 1)
+          echo "vendor.img mounted successfully."
 
       - name: Locate build.prop and extract device info
         run: |
-          cd vendor_extracted
+          cd vendor_mount
           if [ -f build.prop ]; then
             echo "build.prop found. Extracting device info..."
             MANUFACTURER=$(grep -oP 'ro.product.manufacturer=\K.*' build.prop)
