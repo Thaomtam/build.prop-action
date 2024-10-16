@@ -46,7 +46,7 @@ jobs:
                     echo "::error::vendor.img not found!"
                     exit 1
                   fi
-                  # Check if it's a sparse image
+                  # Kiểm tra xem có phải sparse image hay không
                   if file "$vendor_image" | grep -q "sparse"; then
                     echo "Converting sparse image..."
                     simg2img "$vendor_image" vendor_raw.img
@@ -54,8 +54,19 @@ jobs:
                     echo "Not a sparse image, copying directly."
                     cp "$vendor_image" vendor_raw.img
                   fi
-                  mkdir vendor_mount
-                  sudo mount -o loop vendor_raw.img vendor_mount
+            
+                  # Kiểm tra loại hệ thống file
+                  file_type=$(file vendor_raw.img)
+                  echo "File type: $file_type"
+            
+                  # Chỉ mount nếu là ext4 hoặc loại file hệ thống hợp lệ
+                  if echo "$file_type" | grep -q "ext4"; then
+                    mkdir vendor_mount
+                    sudo mount -o loop vendor_raw.img vendor_mount
+                  else
+                    echo "::error::Unsupported file system type!"
+                    exit 1
+                  fi
 
             - name: Extract build.prop
               run: |
