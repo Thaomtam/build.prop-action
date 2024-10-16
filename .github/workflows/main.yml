@@ -5,10 +5,10 @@ on:
     inputs:
       ROM_URL:
         description: "ROM URL"
-        default: "https://builds.paranoidandroid.co/aospa-topaz-2-bladerunner_48m-20230820-image.zip"
+        default: "https://builds.paranoidandroid.co/aospa-uvite-beta-phone2-20240623-image.zip"
       DEVICE_NAME:
         description: "Device Name"
-        default: "oneplus9"
+        default: "Nothing phone 2"
 
 jobs:
   extract-rom:
