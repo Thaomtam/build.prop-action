@@ -38,7 +38,7 @@ jobs:
                   echo "ZIP_FILE=rom.zip" >> $GITHUB_ENV
                   echo "ZIP_FILE_SHA256=$(sha256sum rom.zip | cut -d' ' -f1)" >> $GITHUB_ENV
 
-            - name: Find and extract vendor.img
+            - name: Find and convert vendor.img
               run: |
                   cd extracted_rom
                   vendor_image=$(find . -name "vendor.img")
@@ -46,7 +46,14 @@ jobs:
                     echo "::error::vendor.img not found!"
                     exit 1
                   fi
-                  simg2img "$vendor_image" vendor_raw.img
+                  # Check if it's a sparse image
+                  if file "$vendor_image" | grep -q "sparse"; then
+                    echo "Converting sparse image..."
+                    simg2img "$vendor_image" vendor_raw.img
+                  else
+                    echo "Not a sparse image, copying directly."
+                    cp "$vendor_image" vendor_raw.img
+                  fi
                   mkdir vendor_mount
                   sudo mount -o loop vendor_raw.img vendor_mount
 
