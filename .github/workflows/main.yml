@@ -5,10 +5,10 @@ on:
         inputs:
             ROM_URL:
                 description: "ROM_URL"
-                default: "https://builds.paranoidandroid.co/aospa-topaz-2-bladerunner_48m-20230820-image.zip"
+                default: "https://pixeldrain.com/api/file/StGHtPFc"
             DEVICE_NAME:
                 description: "DEVICE_NAME"
-                default: "oneplus9"
+                default: "OnePlus 9R"
             EXTRACTED_FILES:
                 description: "EXTRACTED_FILES"
                 default: "build.prop"
