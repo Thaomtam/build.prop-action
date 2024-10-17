@@ -1,4 +1,4 @@
-name: Extract Vendor Image
+name: unzip_vendor
 
 on:
   workflow_dispatch:
