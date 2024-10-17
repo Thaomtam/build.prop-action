@@ -30,7 +30,14 @@ jobs:
               run: |
                   curl -LO ${{ github.event.inputs.ROM_URL }}
                   downloaded_file=$(ls -t | head -n 1)  # Lấy file mới nhất
+                  
+                  # Output the first few lines of the file to inspect its contents
+                  echo "First few lines of the downloaded file:"
+                  head -n 10 "$downloaded_file"
+
+                  # Check if it's a valid zip archive
                   file_type=$(file -b --mime-type "$downloaded_file")
+                  echo "Downloaded file type: $file_type"
 
                   if [ "$file_type" != "application/zip" ]; then
                     echo "Error: Downloaded file is not a valid zip archive"
