@@ -1,4 +1,4 @@
-name: Extract Vendor
+name: Extract and Release
 
 on:
     workflow_dispatch:
@@ -14,7 +14,7 @@ on:
                 default: "vendor.img"
 
 jobs:
-    extract-and-release:
+    build-and-release:
         runs-on: ubuntu-latest
         permissions: write-all
         steps:
@@ -24,27 +24,39 @@ jobs:
             - name: Install tools
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y unzip
+                  sudo apt-get install -y simg2img unzip e2fsprogs
 
-            - name: Download ROM file
+            - name: Download ROM file and rename
               run: |
-                  curl -LJO ${{ github.event.inputs.ROM_URL }}
-                  downloaded_file=$(basename "${{ github.event.inputs.ROM_URL }}")
+                  curl -LO ${{ github.event.inputs.ROM_URL }}
+                  downloaded_file=$(ls -t | head -n 1)  # Lấy file mới nhất
                   mv "$downloaded_file" rom.zip
 
-            - name: Extract vendor.img
+            - name: Extract ROM
               run: |
-                  unzip rom.zip "$EXTRACTED_FILES" -d extracted_files/
-                  ls extracted_files/
+                  unzip rom.zip -d extracted_rom
+                  echo "ZIP_FILE=rom.zip" >> $GITHUB_ENV
+                  echo "ZIP_FILE_SHA256=$(sha256sum rom.zip | cut -d' ' -f1)" >> $GITHUB_ENV
+
+            - name: Find vendor.img
+              run: |
+                  vendor_img_path=$(find extracted_rom -name vendor.img)
+                  if [ -z "$vendor_img_path" ]; then
+                    echo "vendor.img not found!"
+                    exit 1
+                  else
+                    echo "Found vendor.img at $vendor_img_path"
+                  fi
+                  echo "VENDOR_IMG=$vendor_img_path" >> $GITHUB_ENV
 
             - name: Upload vendor.img to Release
               uses: actions/upload-release-asset@v1
               with:
                   upload_url: ${{ github.event.release.upload_url }}
-                  asset_path: extracted_files/${{ github.event.inputs.EXTRACTED_FILES }}
+                  asset_path: ${{ env.VENDOR_IMG }}
                   asset_name: ${{ github.event.inputs.DEVICE_NAME }}-vendor.img
                   asset_content_type: application/octet-stream
 
             - name: Clean up
               run: |
-                  rm -rf extracted_files rom.zip
+                  rm -rf extracted_rom rom.zip
