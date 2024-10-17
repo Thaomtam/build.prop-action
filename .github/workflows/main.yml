@@ -23,9 +23,16 @@ jobs:
                   sudo apt-get update
                   sudo apt-get install -y simg2img unzip
 
-            - name: Download ROM file and rename
+            - name: Download ROM file
               run: |
-                  curl -LJO ${{ github.event.inputs.ROM_URL }} -o rom.zip
+                  curl -L -v -o rom.zip ${{ github.event.inputs.ROM_URL }}
+
+            - name: Verify ROM file exists
+              run: |
+                  if [ ! -f "rom.zip" ]; then
+                    echo "::error::Failed to download ROM file!"
+                    exit 1
+                  fi
 
             - name: Extract ROM
               run: |
