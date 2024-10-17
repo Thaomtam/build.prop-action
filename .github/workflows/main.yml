@@ -24,8 +24,21 @@ jobs:
 
             # Bước 2: Tải xuống file ROM từ URL
             - name: Download ROM file
-              run: curl -LJO ${{ github.event.inputs.ROM_URL }}
+              run: |
+                  curl -LJO ${{ github.event.inputs.ROM_URL }}
+                  file_name=$(basename -a *.zip)
+                  
+                  # Kiểm tra xem file có phải là file zip hợp lệ không
+                  if ! file "$file_name" | grep -q 'Zip archive data'; then
+                    echo "::error::Downloaded file is not a valid zip archive."
+                    exit 1
+                  fi
 
+                  # Kiểm tra kích thước file có hợp lệ không (> 0)
+                  if [ ! -s "$file_name" ]; then
+                    echo "::error::Downloaded file is empty or corrupted."
+                    exit 1
+                  fi
             # Bước 3: Trích xuất các file từ ROM.zip
             - name: Extract ROM zip
               run: |
