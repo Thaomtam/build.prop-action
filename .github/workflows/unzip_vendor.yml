@@ -13,24 +13,19 @@ jobs:
       - name: Install required tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y simg2img e2fsprogs
+          sudo apt-get install -y e2fsprogs
 
       - name: Download vendor.img
         run: |
           curl -L -o vendor.img https://github.com/Thaomtam/build.prop-action/releases/download/11385278284/vendor.img
 
-      - name: Convert sparse image to raw image
-        run: |
-          simg2img vendor.img vendor.raw.img
-          echo "vendor.raw.img created"
-
       - name: Create mount point
         run: |
           mkdir -p /mnt/vendor
 
-      - name: Mount raw image
+      - name: Mount vendor.img
         run: |
-          sudo mount -o loop vendor.raw.img /mnt/vendor
+          sudo mount -o loop vendor.img /mnt/vendor
           echo "vendor.img mounted at /mnt/vendor"
 
       - name: List contents of vendor image
@@ -41,4 +36,4 @@ jobs:
         run: |
           sudo umount /mnt/vendor
           rm -rf /mnt/vendor
-          echo "Unmounted vendor.raw.img"
+          echo "Unmounted vendor.img"
