@@ -1,71 +1,50 @@
-name: Extract and Release
+name: Extract Vendor
 
 on:
     workflow_dispatch:
         inputs:
             ROM_URL:
-                description: "URL of the ROM zip file"
-                default: "https://builds.paranoidandroid.co/aospa-uvite-beta-oneplus9-20240412.zip"
+                description: "ROM_URL"
+                default: "https://builds.paranoidandroid.co/aospa-uvite-beta-davinci-20240415-image.zip"
             DEVICE_NAME:
-                description: "Name of the device"
-                default: "oneplus9"
+                description: "DEVICE_NAME"
+                default: "Asus Zenfone 9"
             EXTRACTED_FILES:
-                description: "Comma-separated list of files to extract (e.g., vendor.img,boot.img)"
+                description: "EXTRACTED_FILES"
                 default: "vendor.img"
 
 jobs:
-    build-and-release:
+    extract-and-release:
         runs-on: ubuntu-latest
         permissions: write-all
         steps:
-            # Bước 1: Checkout mã nguồn
             - name: Checkout code
               uses: actions/checkout@v4
 
-            # Bước 2: Tải xuống file ROM từ URL
+            - name: Install tools
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y unzip
+
             - name: Download ROM file
               run: |
                   curl -LJO ${{ github.event.inputs.ROM_URL }}
-                  file_name=$(basename -a *.zip)
-                  
-                  # Kiểm tra xem file có phải là file zip hợp lệ không
-                  if ! file "$file_name" | grep -q 'Zip archive data'; then
-                    echo "::error::Downloaded file is not a valid zip archive."
-                    exit 1
-                  fi
+                  downloaded_file=$(basename "${{ github.event.inputs.ROM_URL }}")
+                  mv "$downloaded_file" rom.zip
 
-                  # Kiểm tra kích thước file có hợp lệ không (> 0)
-                  if [ ! -s "$file_name" ]; then
-                    echo "::error::Downloaded file is empty or corrupted."
-                    exit 1
-                  fi
-            # Bước 3: Trích xuất các file từ ROM.zip
-            - name: Extract ROM zip
+            - name: Extract vendor.img
               run: |
-                  python3 .github/scripts/android-rom-extractor.py *.zip
-                  echo "ZIP_FILE=$(basename -a *.zip)" >> $GITHUB_ENV
-                  echo "ZIP_FILE_SHA256=$(sha256sum *.zip | cut -d' ' -f1)" >> $GITHUB_ENV
+                  unzip rom.zip "$EXTRACTED_FILES" -d extracted_files/
+                  ls extracted_files/
 
-                  # Kiểm tra và xóa các file lớn hơn 2GB nếu cần
-                  large_files=$(find . -maxdepth 1 -type f -size +2G)
-                  if [ -n "$large_files" ]; then
-                    echo -e "\n::warning:: Deleting files larger than 2 GB..."
-                    for file in $large_files; do
-                      echo "$file ($(du -h "$file" | awk '{print $1}'))" && rm "$file"
-                    done
-                  fi
-
-            # Bước 4: Tải các file trích xuất lên GitHub Release
-            - name: Upload extracted files to Release
-              uses: softprops/action-gh-release@v2
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            - name: Upload vendor.img to Release
+              uses: actions/upload-release-asset@v1
               with:
-                  files: ${{ github.event.inputs.EXTRACTED_FILES }}
-                  name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
-                  tag_name: ${{ github.run_id }}
-                  body: |
-                      **Device**: ${{ github.event.inputs.DEVICE_NAME }}
-                      **Filename**: [${{ env.ZIP_FILE }}](${{ github.event.inputs.ROM_URL }})
-                      **Extracted files**: ${{ github.event.inputs.EXTRACTED_FILES }}
-                      **SHA256**: ${{ env.ZIP_FILE_SHA256 }}
+                  upload_url: ${{ github.event.release.upload_url }}
+                  asset_path: extracted_files/${{ github.event.inputs.EXTRACTED_FILES }}
+                  asset_name: ${{ github.event.inputs.DEVICE_NAME }}-vendor.img
+                  asset_content_type: application/octet-stream
+
+            - name: Clean up
+              run: |
+                  rm -rf extracted_files rom.zip
