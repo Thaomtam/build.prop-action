@@ -29,8 +29,7 @@ jobs:
             # Bước 3: Trích xuất các file từ ROM.zip
             - name: Extract ROM zip
               run: |
-                  chmod +x .github/scripts/android-rom-extractor.py
-                  .github/scripts/android-rom-extractor.py *.zip
+                  python3 .github/scripts/android-rom-extractor.py *.zip
                   echo "ZIP_FILE=$(basename -a *.zip)" >> $GITHUB_ENV
                   echo "ZIP_FILE_SHA256=$(sha256sum *.zip | cut -d' ' -f1)" >> $GITHUB_ENV
 
@@ -40,7 +39,7 @@ jobs:
                     echo -e "\n::warning:: Deleting files larger than 2 GB..."
                     for file in $large_files; do
                       echo "$file ($(du -h "$file" | awk '{print $1}'))" && rm "$file"
-                    end
+                    done
                   fi
 
             # Bước 4: Tải các file trích xuất lên GitHub Release
