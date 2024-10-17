@@ -1,75 +1,59 @@
 name: Extract and Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      ROM_URL:
-        description: "ROM URL"
-        default: "https://builds.paranoidandroid.co/aospa-uvite-beta-phone2-20240623-image.zip"
-      DEVICE_NAME:
-        description: "Device Name"
-        default: "phone2"
+    workflow_dispatch:
+        inputs:
+            ROM_URL:
+                description: "URL of the ROM zip file"
+                default: "https://builds.paranoidandroid.co/aospa-uvite-beta-oneplus9-20240412.zip"
+            DEVICE_NAME:
+                description: "Name of the device"
+                default: "oneplus9"
+            EXTRACTED_FILES:
+                description: "Comma-separated list of files to extract (e.g., vendor.img,boot.img)"
+                default: "vendor.img"
 
 jobs:
-  extract-rom:
-    runs-on: ubuntu-latest
+    build-and-release:
+        runs-on: ubuntu-latest
+        permissions: write-all
+        steps:
+            # Bước 1: Checkout mã nguồn
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+            # Bước 2: Tải xuống file ROM từ URL
+            - name: Download ROM file
+              run: curl -LJO ${{ github.event.inputs.ROM_URL }}
 
-      - name: Install necessary packages (7-Zip, simg2img)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full simg2img
+            # Bước 3: Trích xuất các file từ ROM.zip
+            - name: Extract ROM zip
+              run: |
+                  chmod +x .github/scripts/android-rom-extractor.py
+                  .github/scripts/android-rom-extractor.py *.zip
+                  echo "ZIP_FILE=$(basename -a *.zip)" >> $GITHUB_ENV
+                  echo "ZIP_FILE_SHA256=$(sha256sum *.zip | cut -d' ' -f1)" >> $GITHUB_ENV
 
-      - name: Download ROM file
-        run: |
-          curl -L -w "%{http_code}" ${{ github.event.inputs.ROM_URL }} --output rom.zip
-          if [ $? -ne 0 ]; then
-            echo "::error:: Failed to download ROM file!"
-            exit 1
-          fi
+                  # Kiểm tra và xóa các file lớn hơn 2GB nếu cần
+                  large_files=$(find . -maxdepth 1 -type f -size +2G)
+                  if [ -n "$large_files" ]; then
+                    echo -e "\n::warning:: Deleting files larger than 2 GB..."
+                    for file in $large_files; do
+                      echo "$file ($(du -h "$file" | awk '{print $1}'))" && rm "$file"
+                    end
+                  fi
 
-          FILE_TYPE=$(file rom.zip)
-          if [[ "$FILE_TYPE" != *"Zip archive"* ]]; then
-            echo "::error:: The downloaded file is not a valid ZIP archive!"
-            exit 1
-          fi
-          
-          FILE_SIZE=$(stat -c%s "rom.zip")
-          if [[ "$FILE_SIZE" -lt 10240 ]]; then
-            echo "::error:: Downloaded ROM file is too small. Possible download error!"
-            exit 1
-          fi
-
-      - name: Extract ROM using 7-Zip
-        run: |
-          7z x rom.zip -orom_extracted
-          if [ $? -ne 0 ]; then
-            echo "::error:: Failed to extract ROM zip!"
-            exit 1
-          fi
-
-      - name: Check and convert vendor.img if necessary
-        run: |
-          cd rom_extracted
-          if [ -f vendor.img ]; then
-            VENDOR_TYPE=$(file vendor.img)
-            if [[ "$VENDOR_TYPE" == *"Android sparse image"* ]]; then
-              simg2img vendor.img vendor_raw.img
-              mv vendor_raw.img vendor.img
-            fi
-          else
-            echo "::error:: vendor.img not found!"
-            exit 1
-          fi
-
-      - name: Upload vendor.img to Release
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          files: rom_extracted/vendor.img
-          name: ${{ github.event.inputs.DEVICE_NAME }}-vendor-${{ github.run_id }}
-          tag_name: ${{ github.run_id }}
+            # Bước 4: Tải các file trích xuất lên GitHub Release
+            - name: Upload extracted files to Release
+              uses: softprops/action-gh-release@v2
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  files: ${{ github.event.inputs.EXTRACTED_FILES }}
+                  name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
+                  tag_name: ${{ github.run_id }}
+                  body: |
+                      **Device**: ${{ github.event.inputs.DEVICE_NAME }}
+                      **Filename**: [${{ env.ZIP_FILE }}](${{ github.event.inputs.ROM_URL }})
+                      **Extracted files**: ${{ github.event.inputs.EXTRACTED_FILES }}
+                      **SHA256**: ${{ env.ZIP_FILE_SHA256 }}
