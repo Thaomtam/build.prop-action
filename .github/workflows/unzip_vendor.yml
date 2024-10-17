@@ -19,21 +19,21 @@ jobs:
         run: |
           curl -L -o vendor.img https://github.com/Thaomtam/build.prop-action/releases/download/11385278284/vendor.img
 
-      - name: Create mount point
+      - name: Create mount point in the workspace
         run: |
-          mkdir -p /mnt/vendor
+          mkdir -p $GITHUB_WORKSPACE/vendor_mount
 
       - name: Mount vendor.img
         run: |
-          sudo mount -o loop vendor.img /mnt/vendor
-          echo "vendor.img mounted at /mnt/vendor"
+          sudo mount -o loop vendor.img $GITHUB_WORKSPACE/vendor_mount
+          echo "vendor.img mounted at $GITHUB_WORKSPACE/vendor_mount"
 
       - name: List contents of vendor image
         run: |
-          ls /mnt/vendor
+          ls $GITHUB_WORKSPACE/vendor_mount
 
       - name: Unmount image
         run: |
-          sudo umount /mnt/vendor
-          rm -rf /mnt/vendor
+          sudo umount $GITHUB_WORKSPACE/vendor_mount
+          rm -rf $GITHUB_WORKSPACE/vendor_mount
           echo "Unmounted vendor.img"
