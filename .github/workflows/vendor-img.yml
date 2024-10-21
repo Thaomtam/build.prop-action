@@ -45,10 +45,10 @@ jobs:
       # 5. Mount vendor.img and extract build.prop
       - name: Mount and extract build.prop
         run: |
-          mkdir -p /mnt/vendor
-          sudo mount -o loop extracted_rom/vendor.img /mnt/vendor
-          cp /mnt/vendor/build.prop ./${{ github.event.inputs.device_name }}_build.prop
-          sudo umount /mnt/vendor
+          mkdir -p /tmp/vendor
+          sudo mount -o loop extracted_rom/vendor.img /tmp/vendor
+          cp /tmp/vendor/build.prop ./${{ github.event.inputs.device_name }}_build.prop
+          sudo umount /tmp/vendor
 
       # 6. Clean up to save space (remove rom.zip and unnecessary files)
       - name: Clean up unnecessary files
