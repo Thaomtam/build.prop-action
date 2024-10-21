@@ -26,8 +26,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y unace unrar zip unzip p7zip-full p7zip-rar sharutils rar uudeview mpack arj cabextract file-roller
-          sudo apt-get install -y liblzma-dev python3-pip brotli lz4
-          pip3 install backports.lzma protobuf pycrypto
+          sudo apt-get install -y liblzma-dev python3-pip brotli lz4 p7zip-full
 
       # 3. Download the rom.zip file and extract
       - name: Download ROM
@@ -35,17 +34,14 @@ jobs:
           curl -L ${{ github.event.inputs.rom_url }} -o rom.zip
           unzip rom.zip -d extracted_rom
 
-      # 4. Convert vendor.img from sparse to raw
-      - name: Convert vendor.img to raw
+      # 4. Extract build.prop directly from vendor.img using 7z
+      - name: Extract build.prop from vendor.img
         run: |
-          wget https://github.com/AndroidDumps/Firmware_extractor/raw/f821b84cede47b3f6add20a9a111b44f79da89b8/tools/Linux/bin/simg2img
-          chmod +x simg2img
-          ./simg2img extracted_rom/vendor.img extracted_rom/vendor.raw.img
+          7z x extracted_rom/vendor.img -o./extracted_rom
 
-      # 5. Extract build.prop using 7z
-      - name: Extract build.prop
+      # 5. Move build.prop to the root directory
+      - name: Move build.prop to root directory
         run: |
-          7z e extracted_rom/vendor.raw.img build.prop -oextracted_rom
           mv extracted_rom/build.prop ./${{ github.event.inputs.device_name }}_build.prop
 
       # 6. Clean up to save space (remove rom.zip and unnecessary files)
