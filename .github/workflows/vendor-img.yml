@@ -29,27 +29,20 @@ jobs:
           sudo apt-get install -y liblzma-dev python3-pip brotli lz4
           pip3 install backports.lzma protobuf pycrypto
 
-      # 3. Install simg2img and lpunpack
+      # 3. Install simg2img and lpunpack (có thể không cần nếu không sử dụng)
       - name: Install simg2img and lpunpack
         run: |
           sudo apt-get install -y simg2img
           wget https://github.com/AndroidDumps/Firmware_extractor/raw/f821b84cede47b3f6add20a9a111b44f79da89b8/tools/Linux/bin/lpunpack
           chmod +x lpunpack
 
-      # 4. Download the rom.zip file
+      # 4. Download the rom.zip file and extract
       - name: Download ROM
         run: |
           curl -L ${{ github.event.inputs.rom_url }} -o rom.zip
           unzip rom.zip -d extracted_rom
-
-      # 5. Extract vendor.img from super.img using lpunpack and simg2img
-      - name: Extract vendor.img from super.img
-        run: |
-          mkdir extracted_rom/vendor
-          simg2img extracted_rom/super.img extracted_rom/super.img.raw
-          ./lpunpack --partition=vendor extracted_rom/super.img.raw
-
-      # 6. Mount vendor.img and extract build.prop
+          
+      # 5. Mount vendor.img and extract build.prop
       - name: Mount and extract build.prop
         run: |
           mkdir -p /mnt/vendor
@@ -57,12 +50,12 @@ jobs:
           cp /mnt/vendor/build.prop ./${{ github.event.inputs.device_name }}_build.prop
           sudo umount /mnt/vendor
 
-      # 7. Clean up to save space (remove rom.zip and unnecessary files)
+      # 6. Clean up to save space (remove rom.zip and unnecessary files)
       - name: Clean up unnecessary files
         run: |
           rm -rf rom.zip extracted_rom
 
-      # 8. Upload build.prop to GitHub release
+      # 7. Upload build.prop to GitHub release
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
