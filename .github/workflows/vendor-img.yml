@@ -1,0 +1,73 @@
+name: Extract build.prop from ROM
+
+on:
+  workflow_dispatch:
+    inputs:
+      rom_url:
+        description: 'Link to the rom.zip file'
+        required: true
+        type: string
+      device_name:
+        description: 'Name of the device'
+        required: true
+        type: string
+
+jobs:
+  extract_build_prop:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # 2. Download the rom.zip file
+      - name: Download ROM
+        run: |
+          curl -L ${{ github.event.inputs.rom_url }} -o rom.zip
+          unzip rom.zip -d extracted_rom
+
+      # 3. Extract vendor.img from super.img using lpunpack and simg2img
+      - name: Extract vendor.img from super.img
+        run: |
+          mkdir extracted_rom/vendor
+          simg2img extracted_rom/super.img extracted_rom/super.img.raw
+          wget https://github.com/AndroidDumps/Firmware_extractor/raw/f821b84cede47b3f6add20a9a111b44f79da89b8/tools/Linux/bin/lpunpack
+          chmod +x lpunpack
+          ./lpunpack --partition=vendor extracted_rom/super.img.raw
+
+      # 4. Mount vendor.img and extract build.prop
+      - name: Mount and extract build.prop
+        run: |
+          mkdir -p /mnt/vendor
+          sudo mount -o loop extracted_rom/vendor.img /mnt/vendor
+          cp /mnt/vendor/build.prop ./${{ github.event.inputs.device_name }}_build.prop
+          sudo umount /mnt/vendor
+
+      # 5. Clean up to save space (remove rom.zip and unnecessary files)
+      - name: Clean up unnecessary files
+        run: |
+          rm -rf rom.zip extracted_rom
+
+      # 6. Upload build.prop to GitHub release
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.sha }}
+          release_name: "Build.prop for ${{ github.event.inputs.device_name }}"
+          body: "This release contains the build.prop for ${{ github.event.inputs.device_name }}. ROM link: ${{ github.event.inputs.rom_url }}"
+          draft: false
+          prerelease: false
+
+      - name: Upload build.prop to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./${{ github.event.inputs.device_name }}_build.prop
+          asset_name: "${{ github.event.inputs.device_name }}_build.prop"
+          asset_content_type: text/plain
